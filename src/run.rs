@@ -1,4 +1,4 @@
-use std::io::{self, Write};
+use std::io::{self, stdin, stdout, BufRead, Write};
 
 use burn::tensor::activation::softmax;
 use burn::tensor::{Int, Shape, Tensor, TensorData};
@@ -16,50 +16,25 @@ use crate::model::model::GPT;
 
 pub fn run<B:Backend>(
     model: &GPT<B>, 
-    tokenizer: &impl Tokenizer, 
-    prompt: &str, 
+    tk: &impl Tokenizer,
     n_new_tokens: usize, 
     ctx_len: usize,
     seed: u64) {
         let device = <B as Backend>::Device::default();
         let mut rng = StdRng::seed_from_u64(seed);
 
-        let mut indecies = tokenizer.encode(&prompt);
+        loop {
 
-        println!("PROMPT: {prompt}");
+        print!("PROMPT: ");
 
-        for _ in 0..n_new_tokens {
-            let x = {
-                let idx_slice = &indecies[(indecies.len() as isize - ctx_len as isize).max(0) as usize..];
-                Tensor::<B, 2, Int>::from_data(
-                    TensorData::new(idx_slice.to_vec().iter().map(|x| *x as i32).collect()
-                    , Shape::new([1, idx_slice.len()])), 
-                    &device
-                )
-            };
+        let _ = io::stdout().flush();
 
-            let output = model.forward(x);
-            let n = output.dims()[1];
-            let slice = output.slice([(0..1), (n-1..n)]).flatten::<1>(0, 2);
-            let probs = softmax(slice, 0)
-                .into_data()
-                .convert::<f32>();
-            let prob_slice = probs
-                .as_slice::<f32>()
-                .expect("Error parsing softmax probabilities");
-            let distribution = WeightedIndex::new(
-                &prob_slice[..prob_slice.len() - 1]).unwrap();
-            let pred = distribution.sample(&mut rng) as usize;
-            indecies.push(pred);
-            let dec = tokenizer.decode(&vec![pred]);
-            
-            print!("{}", dec);
+        let mut prompt = String::new();
 
-            if dec == "<E>" {
-                return;
-            }
-            io::stdout().flush().unwrap();
-        }
+        let _ = io::stdin().read_line(&mut prompt);
+
+        model.generate(&prompt, ctx_len, n_new_tokens, &mut rng, tk, &device);
+
         println!();
-
+        }
     }

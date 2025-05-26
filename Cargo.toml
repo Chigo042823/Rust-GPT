@@ -6,3 +6,4 @@ edition = "2024"
 [dependencies]
 burn = {version = "0.17.0", features = ["train", "tch"]}
 rand = "0.9.1"
+unicode-segmentation = "1.12.0"
